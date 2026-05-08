@@ -55,7 +55,7 @@ _DL_SEC_GWAD = DLz(_Z_GWAD) * KPC_TO_SECONDS
 _ETA_GWAD   = np.linspace(1e-3, 0.249, 40)
 _DISC_GWAD  = 1.0 - 4.0 * _ETA_GWAD
 _KERN_GWAD  = np.where(_DISC_GWAD > 1e-10,
-                       1.0 / (np.log(10)**2 * _ETA_GWAD * np.sqrt(_DISC_GWAD)),
+                       1.0 / (_ETA_GWAD * np.sqrt(_DISC_GWAD)),
                        0.0)
 
 # ── m1/m2 coefficients: m1 = Mc·_M1C_GWAD[k], m2 = Mc·_M2C_GWAD[k] ──────────

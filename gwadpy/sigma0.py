@@ -14,7 +14,7 @@ from .windows import R_MEAN_SQ
 from ._nb_kernels import NUMBA_AVAILABLE, nb_accumulate_sigma2
 
 # PREFACTOR = <|R|²> / (2(4π)²) = R_MEAN_SQ / (2(4π)²)
-_PREFACTOR = R_MEAN_SQ / (2.0 * (4.0 * np.pi) ** 2)
+_PREFACTOR = 2*R_MEAN_SQ / ((4.0 * np.pi) ** 2)
 
 
 # ── Weak floor ────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ def _sigma2_mean(sim, n_f=20):
 
 # ── Monte Carlo σ₀² sampler ──────────────────────────────────────────────────
 
-def sample_sigma2(sim, n_real, use_wm=False, rng=None, chunk=5_000):
+def sample_sigma2(sim, n_real, use_wm=True, rng=None, chunk=5_000):
     """Draw n_real realisations of σ₀²_k for all modes; returns (n_real, n_modes)."""
     if rng is None:
         rng = np.random.default_rng()
