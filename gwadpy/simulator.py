@@ -66,6 +66,7 @@ class GlobalResidualsSimulator:
         h.update(self.f_obs.tobytes())
         h.update(f"{n_strong}|{self.T_obs}".encode())
         h.update(repr(sorted(self.env_params.items())).encode())
+        h.update((self.window_name or 'custom').encode())
         try:
             tm = np.array([1e6, 1e8, 1e9, 1e11, 1e12])
             tz = np.array([0.1, 0.5, 1.0, 2.0,  4.0])
@@ -343,13 +344,6 @@ class GlobalResidualsSimulator:
                 w3 = np.abs(self.window_fn(f_pts, fk, self.T_obs))**3
                 tn[ki] += np.trapezoid(C_f / f_pts**4 * w3, f_pts)
         return tn / (256.0 * np.pi**3)
-
-    def compute_sigma_k(self):
-        """Compute per-mode weak-source σ_k (Rayleigh parameter); returns (n_modes,) [s]."""
-        if self._bin_cache is None:
-            raise RuntimeError("Call precompute_bin_stats() first.")
-        total_sigma2 = sum(s['sigma2_weak_per_mode'] for s in self._bin_cache)
-        return np.sqrt(np.maximum(total_sigma2 * R_MEAN_SQ / 2.0, 0.0))
 
     def get_residuals(self, n_real, n_strong=None, n_workers=None,
                       chunk_size=1000, n_tail_samples=None, verbose=True):

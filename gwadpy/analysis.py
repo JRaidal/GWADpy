@@ -166,6 +166,94 @@ def compute_likelihood(dt_grids, pdf_model, pta_data_dir, f_model, n_modes):
     return log_L_modes, log_L_total
 
 
+def compute_sigma0_likelihood(sim, n_real, pta_data_dir,
+                               pbh_scale=1.0, rng=None, kde_bw=0.12,
+                               s2_draws=None):
+    """
+    Fast likelihood for MCMC: sample σ₀ via Monte Carlo, fit a KDE in
+    log₁₀(σ) space, and compute the overlap integral with NANOGrav data.
+
+    pbh_scale linearly rescales all rates (N_strong and sigma2_weak) without
+    rebuilding the bin cache or rate grid.
+
+    Parameters
+    ----------
+    sim          : GlobalResidualsSimulator with precomputed bin stats
+    n_real       : number of MC draws (≥10,000 recommended); ignored if
+                   s2_draws is provided
+    pta_data_dir : path to directory with density.npy / log10rhogrid.npy / freqs.npy
+    pbh_scale    : binary-fraction scaling factor (multiplies all rates)
+    rng          : numpy Generator (optional)
+    kde_bw       : KDE bandwidth factor passed to gaussian_kde
+    s2_draws     : (n_real, n_modes) pre-computed σ₀² draws (e.g. from
+                   composite_sigma0_pdf); if supplied, sampling is skipped
+
+    Returns
+    -------
+    log_L_modes : (n_modes,) per-mode log-likelihoods (nan where skipped)
+    log_L_total : scalar sum of finite entries
+    """
+    if s2_draws is not None:
+        s2 = s2_draws
+    else:
+        from .sigma0 import sample_sigma2
+
+        # ── Temporarily scale bin cache by pbh_scale ──────────────────────────
+        if pbh_scale != 1.0:
+            _saved = [(s['N_strong'], s['sigma2_weak_per_mode'].copy())
+                      for s in sim._bin_cache]
+            for s in sim._bin_cache:
+                s['N_strong']             = s['N_strong'] * pbh_scale
+                s['sigma2_weak_per_mode'] = s['sigma2_weak_per_mode'] * pbh_scale
+
+        try:
+            s2 = sample_sigma2(sim, n_real, rng=rng)   # (n_real, n_modes)
+        finally:
+            if pbh_scale != 1.0:
+                for s, (Ns, sw2) in zip(sim._bin_cache, _saved):
+                    s['N_strong']             = Ns
+                    s['sigma2_weak_per_mode'] = sw2
+
+    sigma = np.sqrt(np.maximum(s2, 1e-120))   # (n_real, n_modes)
+
+    # ── Load NANOGrav data ────────────────────────────────────────────────────
+    data_dir = Path(pta_data_dir)
+    prob_raw = np.load(data_dir / 'density.npy')[0]    # (n_ng, n_bins), log-prob
+    L10rho   = np.load(data_dir / 'log10rhogrid.npy')  # log10(σ / s)
+    fNG      = np.load(data_dir / 'freqs.npy')         # (n_ng,) Hz
+
+    paired = [(int(np.argmin(np.abs(sim.f_obs - fj))), j)
+              for j, fj in enumerate(fNG[:sim.n_modes])]
+
+    log_L_modes = np.full(sim.n_modes, np.nan)
+    for k, j in paired:
+        log10_s = np.log10(sigma[:, k])  # σ₀→ρ: complex→one-component RMS
+
+        kde = gaussian_kde(log10_s, bw_method=kde_bw)
+
+        p_raw = np.exp(prob_raw[j])
+        norm  = np.trapz(p_raw, L10rho)
+        if norm <= 0:
+            continue
+        p_data = p_raw / norm   # dP / d log10(σ)
+
+        x_lo = max(log10_s.min(), L10rho.min())
+        x_hi = min(log10_s.max(), L10rho.max())
+        if x_lo >= x_hi:
+            continue
+
+        x_comm  = np.linspace(x_lo, x_hi, 3000)
+        p_mod_i = kde(x_comm)
+        p_dat_i = interp1d(L10rho, p_data, kind='linear',
+                           bounds_error=False, fill_value=0.0)(x_comm)
+
+        L_k = np.trapz(p_mod_i * p_dat_i, x_comm)
+        log_L_modes[k] = np.log(L_k) if L_k > 0 else -np.inf
+
+    valid = np.isfinite(log_L_modes)
+    return log_L_modes, float(np.sum(log_L_modes[valid]))
+
+
 def compute_variance_likelihood(s0_data, pta_data_dir, f_model, n_modes):
     """
     Overlap likelihood between the σ₀² model PDF and PTA data.

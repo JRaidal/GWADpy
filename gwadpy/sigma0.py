@@ -13,7 +13,6 @@ from time import time as _time
 from .windows import R_MEAN_SQ
 from ._nb_kernels import NUMBA_AVAILABLE, nb_accumulate_sigma2
 
-# PREFACTOR = <|R|²> / (2(4π)²) = R_MEAN_SQ / (2(4π)²)
 _PREFACTOR = 2*R_MEAN_SQ / ((4.0 * np.pi) ** 2)
 
 
@@ -207,7 +206,9 @@ def composite_sigma0_pdf(sim, n_real=20_000, n_bins=80, min_counts=15,
         print(f"  [σ₀] Phase 3: analytic Campbell tail (n_f_quad={n_f_quad}, "
               f"grid=600) ...", end='', flush=True)
     _t0 = _time()
-    univ_lo   = float(np.sqrt(sw.min())) * 0.05
+    _sw_pos   = sw[sw > 0]
+    univ_lo   = (float(np.sqrt(_sw_pos.min())) * 0.05
+                 if len(_sw_pos) > 0 else sigma0_max_global * 1e-8)
     univ_hi   = sigma0_max_global * 10 ** n_tail_dex
     univ_grid = np.geomspace(univ_lo, univ_hi, 600)
     tail_all  = compute_sigma0_tail(sim, univ_grid, sw=sw, n_f_quad=n_f_quad)

@@ -42,7 +42,7 @@ if NUMBA_AVAILABLE:
 
     @njit(cache=True, fastmath=True)
     def _w_tophat(f, fk, T):
-        return f / fk if abs(f - fk) < 0.5 / T else 0.0
+        return 1.0 if abs(f - fk) < 0.5 / T else 0.0
 
     @njit(cache=True, fastmath=True)
     def _w_sinc(f, fk, T):
@@ -138,8 +138,9 @@ if NUMBA_AVAILABLE:
                 f_s = np.exp(log_flo + np.random.random() * log_span)
                 pref = prefactor * A * A / (f_s * f_s)
                 for k in range(n_modes):
-                    w = w_fn(f_s, f_obs[k], T_obs)
-                    s2_out[i, k] += pref * w * w
+                    wp = w_fn( f_s, f_obs[k], T_obs)
+                    wm = w_fn(-f_s, f_obs[k], T_obs)
+                    s2_out[i, k] += pref * (wp * wp + wm * wm)
 
     @njit(cache=False, fastmath=True)
     def _sigma2_tophat(s2_out, n_src_arr, f_obs, T_obs, lf_lo, lf_hi, cx, cf, pf):
@@ -165,9 +166,6 @@ if NUMBA_AVAILABLE:
     }
 
     # ── Tail kernel: accumulate <|g_k|^3> over MC samples ────────────────────
-    # g_k = (|R|/(4π f_src)) * (e^{iδ} w_p − e^{−iδ} w_m)
-    # Expanding:  g_real = P cos δ (w_p − w_m),  g_imag = P sin δ (w_p + w_m)
-    # |g_k|^3 = (g_real² + g_imag²)^{3/2}  — no sqrt + cube needed.
 
     @njit(cache=False, fastmath=True)
     def _tail_core(tn_out, n_samples, f_obs, T_obs, log_flo, log_fhi, r_cdf, r_vals, w_fn):

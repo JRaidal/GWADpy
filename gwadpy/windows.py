@@ -31,7 +31,6 @@ def w_tm(f, fk, T):
 
 def w_tophat(f, fk, T):
     mask = (np.abs(f - fk) < 0.5 / T)
-    # return mask.astype(float) * (f / fk)
     return mask.astype(float)
 
 

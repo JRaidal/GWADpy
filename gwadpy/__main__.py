@@ -235,21 +235,26 @@ def main():
         make_variance_plot(sim, s0_data, ng_data, plot_var, model_label=model_label)
         print(f" done  ({_time() - _t0:.1f}s)  →  {plot_var}")
 
-        # ── σ₀² likelihood ───────────────────────────────────────────────────
-        if args.pta_data_dir is not None:
-            try:
-                from .analysis import compute_variance_likelihood
-                log_L_modes, log_L_total = compute_variance_likelihood(
-                    s0_data, args.pta_data_dir, sim.f_obs, args.n_modes)
-                n_valid = int(np.sum(np.isfinite(log_L_modes)))
-                print(f"\n  σ₀² log-likelihood over {n_valid} modes:")
-                for k in range(args.n_modes):
-                    tag = '  (no overlap)' if not np.isfinite(log_L_modes[k]) else ''
-                    print(f"    k={k+1:2d}  {sim.f_obs[k]*1e9:5.1f} nHz  "
-                          f"ln L = {log_L_modes[k]:9.4f}{tag}")
-                print(f"  Total: ln L = {log_L_total:.4f}")
-            except FileNotFoundError as e:
-                print(f"  Warning: could not compute likelihood ({e})")
+
+
+    # ── σ₀ likelihood (runs whenever --pta-data-dir is given) ────────────────
+    if args.pta_data_dir is not None:
+        try:
+            from .analysis import compute_sigma0_likelihood
+            # Reuse draws already computed by --variance; otherwise sample fresh.
+            _s2 = s0_data['s2_draws'] if args.variance else None
+            log_L_modes, log_L_total = compute_sigma0_likelihood(
+                sim, args.variance_n_real, args.pta_data_dir,
+                kde_bw=args.kde_bw, s2_draws=_s2)
+            n_valid = int(np.sum(np.isfinite(log_L_modes)))
+            print(f"\n  σ₀ log-likelihood over {n_valid} modes:")
+            for k in range(args.n_modes):
+                tag = '  (no overlap)' if not np.isfinite(log_L_modes[k]) else ''
+                print(f"    k={k+1:2d}  {sim.f_obs[k]*1e9:5.1f} nHz  "
+                      f"ln L = {log_L_modes[k]:9.4f}{tag}")
+            print(f"  Total: ln L = {log_L_total:.4f}")
+        except FileNotFoundError as e:
+            print(f"  Warning: could not compute likelihood ({e})")
 
 
 if __name__ == '__main__':
